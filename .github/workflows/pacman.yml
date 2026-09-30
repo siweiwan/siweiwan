@@ -1,0 +1,69 @@
+name: Rotate arcade contribution graph
+
+on:
+  schedule:
+    # 每天 UTC 00:00 自动更新
+    - cron: '0 0 * * *'
+
+  # 允许手动运行
+  workflow_dispatch:
+
+  # 修改配置时立即生成一次
+  push:
+    branches:
+      - main
+
+jobs:
+  generate:
+    permissions:
+      contents: write
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      # 一次生成全部游戏
+      - name: Generate arcade contribution graphs
+        uses: abozanona/pacman-contribution-graph@main
+        with:
+          github_user_name: ${{ github.repository_owner }}
+          games: 'pacman,breakout,galaga,puzzle-bobble,bomberman,minesweeper'
+          hide_month_labels: 'false'
+
+      # 根据当天日期选择一个游戏
+      - name: Pick today's game
+        id: game
+        shell: bash
+        run: |
+          games=(
+            pacman
+            breakout
+            galaga
+            puzzle-bobble
+            bomberman
+            minesweeper
+          )
+
+          day=$(date -u +%j)
+          index=$(( (10#$day - 1) % ${#games[@]} ))
+          game="${games[$index]}"
+
+          echo "Today's game: $game"
+          echo "game=$game" >> "$GITHUB_OUTPUT"
+
+          cp "dist/${game}-contribution-graph.svg" \
+             "dist/current-contribution-graph.svg"
+
+          cp "dist/${game}-contribution-graph-dark.svg" \
+             "dist/current-contribution-graph-dark.svg"
+
+          echo "## 🎮 Today's game: $game" >> "$GITHUB_STEP_SUMMARY"
+
+      # 推送到 output 分支
+      - name: Push SVGs to output branch
+        uses: crazy-max/ghaction-github-pages@v3.1.0
+        with:
+          target_branch: output
+          build_dir: dist
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
